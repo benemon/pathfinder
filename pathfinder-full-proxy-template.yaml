@@ -298,7 +298,7 @@ objects:
           - --cookie-secret=SECRET
           - --skip-auth-regex=/api/*
           - >-
-              --openshift-sar={ "resource": "Project", "verb": "get", "name":"${NAMESPACE}" }
+              --openshift-sar={ "resource": "projects", "verb": "get", "name":"$(NAMESPACE)", "namespace":"$(NAMESPACE)" }
           env:
             - name: NAMESPACE
               valueFrom:
