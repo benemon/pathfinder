@@ -297,6 +297,14 @@ objects:
           - --tls-key=/etc/tls/private/tls.key
           - --cookie-secret=SECRET
           - --skip-auth-regex=/api/*
+          - >-
+              --openshift-sar={ "resource": "Project", "verb": "get", "name":"${NAMESPACE}" }
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
           # image: registry.redhat.io/openshift4/ose-oauth-proxy:latest
           image: registry.redhat.io/openshift3/oauth-proxy:latest
           imagePullPolicy: IfNotPresent
