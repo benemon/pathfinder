@@ -24,26 +24,22 @@ package com.redhat.gps.pathfinder.web.api.security;
 
 import java.util.ArrayList;
 
+import com.redhat.gps.pathfinder.domain.Member;
+import com.redhat.gps.pathfinder.repository.MembersRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
-
-import com.redhat.gps.pathfinder.domain.Member;
-import com.redhat.gps.pathfinder.repository.MembersRepository;
-import com.redhat.gps.pathfinder.service.util.RequestUtils;
 
 @Component
-public class CustomAuthenticationProvider implements AuthenticationManager {
-    private static final Logger log = LoggerFactory.getLogger(CustomAuthenticationProvider.class);
+public class CustomBasicAuthenticationProvider implements AuthenticationManager {
+    private static final Logger log = LoggerFactory.getLogger(CustomBasicAuthenticationProvider.class);
   
-    public CustomAuthenticationProvider(MembersRepository userRepository){
+    public CustomBasicAuthenticationProvider(MembersRepository userRepository){
       this.userRepository=userRepository;
     }
     MembersRepository userRepository;
@@ -53,13 +49,13 @@ public class CustomAuthenticationProvider implements AuthenticationManager {
         String name = authentication.getName();
         String password = authentication.getCredentials().toString();
         
-        log.debug("CustomAuthenticationProvider::authenticate() name={}, password={}", name, password);
+        log.debug("CustomBasicAuthenticationProvider::authenticate() name={}, password={}", name, password);
         
         Member user=userRepository.findOne(name);
         
         if (null==user) return null;
         
-        log.debug("CustomAuthenticationProvider::authenticate():: user={}, password match?={}", name, (password.equals(user.getPassword())));
+        log.debug("CustomBasicAuthenticationProvider::authenticate():: user={}, password match?={}", name, (password.equals(user.getPassword())));
         
         if (password.equals(user.getPassword())){
           return new UsernamePasswordAuthenticationToken(name, password, new ArrayList<>());

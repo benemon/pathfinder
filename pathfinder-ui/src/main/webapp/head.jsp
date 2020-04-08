@@ -4,6 +4,7 @@
 
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 

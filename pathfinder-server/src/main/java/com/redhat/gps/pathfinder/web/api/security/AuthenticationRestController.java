@@ -1,6 +1,8 @@
 package com.redhat.gps.pathfinder.web.api.security;
 
 
+import java.net.URISyntaxException;
+
 /*-
  * #%L
  * Pathfinder
@@ -23,10 +25,13 @@ package com.redhat.gps.pathfinder.web.api.security;
  * #L%
  */
 
-
 import java.util.Objects;
-import java.net.URISyntaxException;
+
 import javax.servlet.http.HttpServletRequest;
+
+import com.redhat.gps.pathfinder.domain.Member;
+import com.redhat.gps.pathfinder.repository.MembersRepository;
+import com.redhat.gps.pathfinder.service.util.MapBuilder;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -40,18 +45,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-//import org.zerhusen.security.JwtAuthenticationRequest;
-//import org.zerhusen.security.JwtTokenUtil;
-//import org.zerhusen.security.JwtUser;
-//import org.zerhusen.security.service.JwtAuthenticationResponse;
-
-import com.redhat.gps.pathfinder.domain.Member;
-import com.redhat.gps.pathfinder.repository.MembersRepository;
-import com.redhat.gps.pathfinder.service.util.MapBuilder;
 
 import mjson.Json;
 
@@ -64,7 +63,8 @@ public class AuthenticationRestController {
     @Autowired
     MembersRepository membersRepository;
     
-    private AuthenticationManager authenticationManager;
+    private AuthenticationManager basicAuthenticationManager;
+    private AuthenticationManager tokenAuthenticationManager;
 
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
@@ -74,41 +74,70 @@ public class AuthenticationRestController {
     private UserDetailsService userDetailsService;
 
     @RequestMapping(value = "/auth", method = RequestMethod.POST)
-    public ResponseEntity<?> createAuthToken(@RequestBody String authRequest) throws RuntimeException, URISyntaxException, CredentialsException {
-        Json jsonReq=Json.read(authRequest);
-        String username=jsonReq.at("username").asString();
-        String password=jsonReq.at("password").asString();
-        Objects.requireNonNull(username);
-        Objects.requireNonNull(password);
-        
-//        Tuple<String, String> user=new Function<Json, Tuple<String,String>>(){
-//          @Override public Tuple<String,String> apply(Json json){
-//            return new Tuple<String,String>(json.at("username").asString(),json.at("password").asString());
-//        }}.apply(Json.read(authRequest));
-//        Objects.requireNonNull(user.getFirst());
-//        Objects.requireNonNull(user.getSecond());
-        
-        try {
-          if (null==authenticationManager) authenticationManager=new CustomAuthenticationProvider(membersRepository);
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
-        } catch (DisabledException e) {
-            throw new CredentialsException("User is disabled!", e);
-        } catch (BadCredentialsException e) {
-            throw new CredentialsException("Bad credentials!", e);
-        }
-        
-        // Reload password post-security so we can generate the token
-        try{
-          final UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-          final String token = jwtTokenUtil.generateToken(userDetails);
+    public ResponseEntity<?> createAuthToken(@RequestBody String authRequest, 
+                                             @RequestHeader(value="x-forwarded-user", required=false) String xForwardedUser) throws RuntimeException, URISyntaxException, CredentialsException {
+        Json jsonReq = Json.read(authRequest);
+        String username = null;                                      
+        if ( null != xForwardedUser) {
+          try {
+            if (null==tokenAuthenticationManager) tokenAuthenticationManager=new CustomTokenAuthenticationProvider(membersRepository);
+              tokenAuthenticationManager.authenticate(new PreAuthenticatedAuthenticationToken(xForwardedUser, xForwardedUser));
+              username = xForwardedUser;
+              // Reload password post-security so we can generate the token
+              try{          
+                return buildResult(getToken(username), getMember(username));
+              }catch(UsernameNotFoundException e){
+                throw new CredentialsException("No user with the name "+username);
+              }              
+          } catch (DisabledException e) {
+              throw new CredentialsException("User is disabled!", e);
+          } catch (BadCredentialsException e) {
+              throw new CredentialsException("Bad credentials!", e);
+          }          
+        }            
+        else {            
+          username=jsonReq.at("username").asString();
+          String password=jsonReq.at("password").asString();
+
+          Objects.requireNonNull(username);
+          Objects.requireNonNull(password);
           
-          Member member=membersRepository.findOne(username);
-          
-          return buildResult(token, member);
-        }catch(UsernameNotFoundException e){
-          throw new CredentialsException("No user with the name "+username);
+          try {
+            if (null==basicAuthenticationManager) basicAuthenticationManager=new CustomBasicAuthenticationProvider(membersRepository);
+              basicAuthenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+
+              // Reload password post-security so we can generate the token
+              try{          
+                return buildResult(getToken(username), getMember(username));
+              }catch(UsernameNotFoundException e){
+                throw new CredentialsException("No user with the name "+username);
+              }
+          } catch (DisabledException e) {
+              throw new CredentialsException("User is disabled!", e);
+          } catch (BadCredentialsException e) {
+              throw new CredentialsException("Bad credentials!", e);
+          }
         }
-        
+    } 
+
+    /**
+     * Return a token based on username
+     * @param username
+     * @return String
+     */
+    private String getToken(String username) {
+      final UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+      final String token = jwtTokenUtil.generateToken(userDetails);
+      return token;
+    }
+
+    /**
+     * Return Member details based on username
+     * @param username
+     * @return Member
+     */
+    private Member getMember(String username) {
+      return membersRepository.findOne(username);
     }
 
     @RequestMapping(value = "/refresh", method = RequestMethod.GET)

@@ -269,19 +269,39 @@ public class Controller{
   public Response login(@Context HttpServletRequest request, @Context HttpServletResponse response) throws URISyntaxException, IOException{
     
     System.out.println("Controller::login() called");
-    
+    String xForwardedUser = request.getHeader("x-forwarded-user");
     String uri=IOUtils.toString(request.getInputStream());
-       
-    final Map<String, String> keyValues=Splitter.on('&').trimResults().withKeyValueSeparator("=").split(uri);
-    
-    log.info("Controller::login():: username="+keyValues.get("username") +", password=****");
+    String formUsername = null;
+    String password =  null;
 
-    log.info("Controller::login():: Auth url (POST) = "+getProperty("PATHFINDER_SERVER")+"/auth");
+    try {
+      final Map<String, String> keyValues=Splitter.on('&').trimResults().withKeyValueSeparator("=").split(uri);
+      formUsername = keyValues.get("username");
+      password = keyValues.get("password");
+    }
+    catch (IllegalArgumentException e1){
+      log.warn("Controller::login():: Could not extract credentials. This is not necessarily a problem. Continuing...");
+    }
     
-    io.restassured.response.Response loginResp = given()
-        .body("{\"username\":\""+keyValues.get("username")+"\",\"password\":\""+keyValues.get("password")+"\"}")
-        .post(getProperty("PATHFINDER_SERVER")+"/auth");
-    
+    io.restassured.response.Response loginResp = null;
+
+    if (null != xForwardedUser && null == formUsername && null == password) {
+      loginResp = null;
+
+      log.info("Controller::login():: x-forwarded-user="+xForwardedUser);
+
+      loginResp = given().header("x-forwarded-user", xForwardedUser).body("{}").post(getProperty("PATHFINDER_SERVER")+"/auth");
+    } else if (null != xForwardedUser && null != formUsername && null != password){
+      loginResp = null;
+
+      log.info("Controller::login():: username="+ formUsername +", password=****");
+      log.info("Controller::login():: Auth url (POST) = "+getProperty("PATHFINDER_SERVER")+"/auth");
+      mjson.Json jsonBody = new mjson.Json.DefaultFactory().object();
+      jsonBody.set("username", formUsername);
+      jsonBody.set("password", password);
+      loginResp = given().body(jsonBody.toString()).post(getProperty("PATHFINDER_SERVER")+"/auth");
+    }
+  
     if (loginResp.statusCode()!=200){
     	log.info("Controller:login():: ERROR1 loginResp(code="+loginResp.statusCode()+").asString() = "+loginResp.asString());
     	log.info("Controller:login():: 3 OUT/ERROR loginResp(code="+loginResp.statusCode()+").asString() = "+loginResp.asString());
@@ -297,7 +317,6 @@ public class Controller{
     
     System.out.println("Controller::login():: jwt json response="+jsonResp.toString(99999999));
     System.out.println("Controller::login():: jwtToken="+jwtToken);
-    
     
     request.getSession().setAttribute("x-access-token", jwtToken);
     request.getSession().setAttribute("x-username", username);

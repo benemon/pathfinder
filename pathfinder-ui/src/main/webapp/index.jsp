@@ -19,11 +19,35 @@
 	-->
 <script>
 	$(document).ready(function () {
+		var xFu = "<%=request.getHeader("x-forwarded-user")%>";
+
+		if (xFu) {
+			console.log("X-FORWARDED-USER: " + xFu)	
+			var jqchr = $.ajax({
+				url: 'pathfinder/login',
+				type: 'post',
+				data: {},
+				headers: {
+					"x-forwarded-user": xFu
+				},
+				dataType: 'json'
+			}).always(function() {
+				//Check if the current URL contains '#'
+				if(document.URL.indexOf("#")==-1 && document.URL.indexOf("jsp")==-1){
+					// Set the URL to whatever it was plus "#".
+					url = document.URL+"#";
+					location = "#";
+					//Reload the page
+					location.reload(true);
+				}
+			});
+		}
+
 		$("#loginForm").submit(function () {
 			$("#submit").attr("disabled", true);
-			//e.preventDefault();
 			return true;
 		});
+
 		$("#username").focus();
 	});
 </script>
